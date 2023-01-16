@@ -1,4 +1,4 @@
-package tourGuide;
+package tourGuide.controller;
 
 import java.util.List;
 
@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.jsoniter.output.JsonStream;
 
 import gpsUtil.location.VisitedLocation;
+import tourGuide.service.GpsUtilService;
 import tourGuide.service.TourGuideService;
 import tourGuide.user.User;
 import tripPricer.Provider;
@@ -19,6 +20,8 @@ public class TourGuideController {
 
 	@Autowired
 	TourGuideService tourGuideService;
+    @Autowired
+    GpsUtilService gpsUtilService;
 	
     @RequestMapping("/")
     public String index() {
@@ -27,7 +30,7 @@ public class TourGuideController {
     
     @RequestMapping("/getLocation") 
     public String getLocation(@RequestParam String userName) {
-    	VisitedLocation visitedLocation = tourGuideService.getUserLocation(getUser(userName));
+    	VisitedLocation visitedLocation = gpsUtilService.getUserLocation(getUser(userName).getUserId());
 		return JsonStream.serialize(visitedLocation.location);
     }
     
@@ -42,7 +45,7 @@ public class TourGuideController {
         //    Note: Attraction reward points can be gathered from RewardsCentral
     @RequestMapping("/getNearbyAttractions") 
     public String getNearbyAttractions(@RequestParam String userName) {
-    	VisitedLocation visitedLocation = tourGuideService.getUserLocation(getUser(userName));
+    	VisitedLocation visitedLocation = gpsUtilService.getUserLocation(getUser(userName).getUserId());
     	return JsonStream.serialize(tourGuideService.getNearByAttractions(visitedLocation));
     }
     

@@ -1,13 +1,9 @@
 package tourGuide.service;
 
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -16,30 +12,35 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import gpsUtil.GpsUtil;
 import gpsUtil.location.Attraction;
-import gpsUtil.location.Location;
 import gpsUtil.location.VisitedLocation;
 import tourGuide.helper.InternalTestHelper;
 import tourGuide.tracker.Tracker;
 import tourGuide.user.User;
 import tourGuide.user.UserReward;
 import tripPricer.Provider;
-import tripPricer.TripPricer;
 
 @Service
 public class TourGuideService {
 	private Logger logger = LoggerFactory.getLogger(TourGuideService.class);
-	private final GpsUtil gpsUtil;
+	private final GpsUtilService gpsUtilService;
 	private final RewardsService rewardsService;
-	private final TripPricer tripPricer = new TripPricer();
+	private final TripPriceService tripPriceService;
+
 	public final Tracker tracker;
+
+
+
+
+
 	boolean testMode = true;
 	
-	public TourGuideService(GpsUtil gpsUtil, RewardsService rewardsService) {
-		this.gpsUtil = gpsUtil;
+	public TourGuideService(GpsUtilService gpsUtilService, RewardsService rewardsService, TripPriceService tripPriceService) {
+		this.gpsUtilService = gpsUtilService;
 		this.rewardsService = rewardsService;
-		
+		this.tripPriceService = tripPriceService;
+
+
 		if(testMode) {
 			logger.info("TestMode enabled");
 			logger.debug("Initializing users");
@@ -54,12 +55,7 @@ public class TourGuideService {
 		return user.getUserRewards();
 	}
 	
-	public VisitedLocation getUserLocation(User user) {
-		VisitedLocation visitedLocation = (user.getVisitedLocations().size() > 0) ?
-			user.getLastVisitedLocation() :
-			trackUserLocation(user);
-		return visitedLocation;
-	}
+
 	
 	public User getUser(String userName) {
 		return internalUserMap.get(userName);
@@ -77,22 +73,22 @@ public class TourGuideService {
 	
 	public List<Provider> getTripDeals(User user) {
 		int cumulatativeRewardPoints = user.getUserRewards().stream().mapToInt(i -> i.getRewardPoints()).sum();
-		List<Provider> providers = tripPricer.getPrice(tripPricerApiKey, user.getUserId(), user.getUserPreferences().getNumberOfAdults(), 
+		List<Provider> providers = tripPriceService.getPrice(tripPricerApiKey, user.getUserId(), user.getUserPreferences().getNumberOfAdults(),
 				user.getUserPreferences().getNumberOfChildren(), user.getUserPreferences().getTripDuration(), cumulatativeRewardPoints);
 		user.setTripDeals(providers);
 		return providers;
 	}
 	
 	public VisitedLocation trackUserLocation(User user) {
-		VisitedLocation visitedLocation = gpsUtil.getUserLocation(user.getUserId());
+		VisitedLocation visitedLocation = gpsUtilService.getUserLocation(user.getUserId());
 		user.addToVisitedLocations(visitedLocation);
-		rewardsService.calculateRewards(user);
+		calculateRewards(user);
 		return visitedLocation;
 	}
 
 	public List<Attraction> getNearByAttractions(VisitedLocation visitedLocation) {
 		List<Attraction> nearbyAttractions = new ArrayList<>();
-		for(Attraction attraction : gpsUtil.getAttractions()) {
+		for(Attraction attraction : gpsUtilService.getAllAttraction()) {
 			if(rewardsService.isWithinAttractionProximity(attraction, visitedLocation.location)) {
 				nearbyAttractions.add(attraction);
 			}
@@ -123,34 +119,28 @@ public class TourGuideService {
 			String phone = "000";
 			String email = userName + "@tourGuide.com";
 			User user = new User(UUID.randomUUID(), userName, phone, email);
-			generateUserLocationHistory(user);
+			this.gpsUtilService.generateUserLocationHistory(user);
 			
 			internalUserMap.put(userName, user);
 		});
 		logger.debug("Created " + InternalTestHelper.getInternalUserNumber() + " internal test users.");
 	}
-	
-	private void generateUserLocationHistory(User user) {
-		IntStream.range(0, 3).forEach(i-> {
-			user.addToVisitedLocations(new VisitedLocation(user.getUserId(), new Location(generateRandomLatitude(), generateRandomLongitude()), getRandomTime()));
-		});
+	public void calculateRewards(User user) {
+		List<VisitedLocation> userLocations = user.getVisitedLocations();
+		List<Attraction> attractions = gpsUtilService.getAllAttraction();
+
+		for(VisitedLocation visitedLocation : userLocations) {
+			for(Attraction attraction : attractions) {
+				if(user.getUserRewards().stream().filter(r -> r.attraction.attractionName.equals(attraction.attractionName)).count() == 0) {
+					if(rewardsService.nearAttraction(visitedLocation, attraction)) {
+						user.addUserReward(new UserReward(visitedLocation, attraction, rewardsService.getRewardPoints(attraction, user)));
+					}
+				}
+			}
+		}
 	}
-	
-	private double generateRandomLongitude() {
-		double leftLimit = -180;
-	    double rightLimit = 180;
-	    return leftLimit + new Random().nextDouble() * (rightLimit - leftLimit);
-	}
-	
-	private double generateRandomLatitude() {
-		double leftLimit = -85.05112878;
-	    double rightLimit = 85.05112878;
-	    return leftLimit + new Random().nextDouble() * (rightLimit - leftLimit);
-	}
-	
-	private Date getRandomTime() {
-		LocalDateTime localDateTime = LocalDateTime.now().minusDays(new Random().nextInt(30));
-	    return Date.from(localDateTime.toInstant(ZoneOffset.UTC));
-	}
-	
+
+
+
+
 }

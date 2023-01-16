@@ -5,7 +5,6 @@ import static org.junit.Assert.assertTrue;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang3.time.StopWatch;
@@ -17,10 +16,12 @@ import gpsUtil.location.Attraction;
 import gpsUtil.location.VisitedLocation;
 import rewardCentral.RewardCentral;
 import tourGuide.helper.InternalTestHelper;
+import tourGuide.service.GpsUtilService;
 import tourGuide.service.RewardsService;
 import tourGuide.service.TourGuideService;
 import tourGuide.user.User;
-import tourGuide.user.UserReward;
+import tourGuide.service.TripPriceService;
+import tripPricer.TripPricer;
 
 public class TestPerformance {
 	
@@ -47,11 +48,11 @@ public class TestPerformance {
 	@Ignore
 	@Test
 	public void highVolumeTrackLocation() {
-		GpsUtil gpsUtil = new GpsUtil();
-		RewardsService rewardsService = new RewardsService(gpsUtil, new RewardCentral());
+		GpsUtilService gpsUtilService = new GpsUtilService(new GpsUtil());
+		RewardsService rewardsService = new RewardsService(new RewardCentral());
 		// Users should be incremented up to 100,000, and test finishes within 15 minutes
 		InternalTestHelper.setInternalUserNumber(100);
-		TourGuideService tourGuideService = new TourGuideService(gpsUtil, rewardsService);
+		TourGuideService tourGuideService = new TourGuideService(gpsUtilService, new RewardsService(new RewardCentral()), new TripPriceService(new TripPricer()));
 
 		List<User> allUsers = new ArrayList<>();
 		allUsers = tourGuideService.getAllUsers();
@@ -72,20 +73,20 @@ public class TestPerformance {
 	@Test
 	public void highVolumeGetRewards() {
 		GpsUtil gpsUtil = new GpsUtil();
-		RewardsService rewardsService = new RewardsService(gpsUtil, new RewardCentral());
+		RewardsService rewardsService = new RewardsService(new RewardCentral());
 
 		// Users should be incremented up to 100,000, and test finishes within 20 minutes
 		InternalTestHelper.setInternalUserNumber(100);
 		StopWatch stopWatch = new StopWatch();
 		stopWatch.start();
-		TourGuideService tourGuideService = new TourGuideService(gpsUtil, rewardsService);
+		TourGuideService tourGuideService = new TourGuideService(new GpsUtilService(gpsUtil), rewardsService, new TripPriceService(new TripPricer()));
 		
 	    Attraction attraction = gpsUtil.getAttractions().get(0);
 		List<User> allUsers = new ArrayList<>();
 		allUsers = tourGuideService.getAllUsers();
 		allUsers.forEach(u -> u.addToVisitedLocations(new VisitedLocation(u.getUserId(), attraction, new Date())));
 	     
-	    allUsers.forEach(u -> rewardsService.calculateRewards(u));
+	    allUsers.forEach(u -> tourGuideService.calculateRewards(u));
 	    
 		for(User user : allUsers) {
 			assertTrue(user.getUserRewards().size() > 0);
