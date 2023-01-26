@@ -24,16 +24,16 @@ import tripPricer.TripPricer;
 
 
 public class TestTourGuideService {
-	//private GpsUtilsService   gpsUtilsService;
+	private GpsUtilService   gpsUtilsService;
 	private RewardsService rewardsService;
-	//private TripPricerService tripPricerService;
+	private TripPriceService tripPricerService;
 
 	@Before
 	public void setUp() {
 
-		//this.gpsUtilsService   = new GpsUtilsService(new GpsUtil());
+		this.gpsUtilsService   = new GpsUtilService(new GpsUtil());
 		this.rewardsService    = new RewardsService(new RewardCentral());
-		//this.tripPricerService = new TripPricerService(new TripPricer());
+		this.tripPricerService = new TripPriceService(new TripPricer());
 	}
 
 

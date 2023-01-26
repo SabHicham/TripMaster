@@ -1,20 +1,19 @@
 package tourGuide.service;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import gpsUtil.location.Location;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import gpsUtil.location.Attraction;
 import gpsUtil.location.VisitedLocation;
 import tourGuide.helper.InternalTestHelper;
+import tourGuide.repository.TourGuideRepository;
 import tourGuide.tracker.Tracker;
 import tourGuide.user.User;
 import tourGuide.user.UserReward;
@@ -28,6 +27,9 @@ public class TourGuideService {
 	private final TripPriceService tripPriceService;
 
 	public final Tracker tracker;
+
+	@Autowired
+	private TourGuideRepository tourGuideRepository;
 
 
 
@@ -54,21 +56,31 @@ public class TourGuideService {
 	public List<UserReward> getUserRewards(User user) {
 		return user.getUserRewards();
 	}
-	
 
+	private void initializeInternalUsers() {
+
+		IntStream.range(0, InternalTestHelper.getInternalUserNumber()).forEach(i -> {
+			String userName = "internalUser" + i;
+			String phone = "000";
+			String email = userName + "@tourGuide.com";
+			User user = new User(UUID.randomUUID(), userName, phone, email);
+			this.gpsUtilService.generateUserLocationHistory(user);
+
+			tourGuideRepository.addUser(user);
+		});
+		logger.debug("Created " + InternalTestHelper.getInternalUserNumber() + " internal test users.");
+	}
 	
 	public User getUser(String userName) {
-		return internalUserMap.get(userName);
+		return tourGuideRepository.getUser(userName);
 	}
 	
 	public List<User> getAllUsers() {
-		return internalUserMap.values().stream().collect(Collectors.toList());
+		return tourGuideRepository.getAllUsers();
 	}
 	
 	public void addUser(User user) {
-		if(!internalUserMap.containsKey(user.getUserName())) {
-			internalUserMap.put(user.getUserName(), user);
-		}
+		tourGuideRepository.addUser(user);
 	}
 	
 	public List<Provider> getTripDeals(User user) {
@@ -112,19 +124,7 @@ public class TourGuideService {
 	 **********************************************************************************/
 	private static final String tripPricerApiKey = "test-server-api-key";
 	// Database connection will be used for external users, but for testing purposes internal users are provided and stored in memory
-	private final Map<String, User> internalUserMap = new HashMap<>();
-	private void initializeInternalUsers() {
-		IntStream.range(0, InternalTestHelper.getInternalUserNumber()).forEach(i -> {
-			String userName = "internalUser" + i;
-			String phone = "000";
-			String email = userName + "@tourGuide.com";
-			User user = new User(UUID.randomUUID(), userName, phone, email);
-			this.gpsUtilService.generateUserLocationHistory(user);
-			
-			internalUserMap.put(userName, user);
-		});
-		logger.debug("Created " + InternalTestHelper.getInternalUserNumber() + " internal test users.");
-	}
+
 	public void calculateRewards(User user) {
 		List<VisitedLocation> userLocations = user.getVisitedLocations();
 		List<Attraction> attractions = gpsUtilService.getAllAttraction();
@@ -140,7 +140,50 @@ public class TourGuideService {
 		}
 	}
 
+	public Map<Double, Attraction> distanceAttractions (UUID userId){
+		// recupere la position de l'utilisateur
+		VisitedLocation visitedLocation = gpsUtilService.getUserLocation(userId);
+		// recupere toutes les attractions
+		List<Attraction> attractions = gpsUtilService.getAllAttraction();
+		// pour chaque attraction
+		   // calculer distance entre ustilisateur et attraction
 
+// stocker le resultat
+		Map<Double, Attraction> distances = new TreeMap<>(new Comparator<Double>() {
+			@Override
+			public int compare(Double o1, Double o2) {
+				return o1.compareTo(o2);
+			}
+		});
+
+		for(Attraction attr: attractions) {
+			double distance = gpsUtilService.getDistance(visitedLocation.location, attr);
+			distances.put(distance, attr);
+		}
+
+
+		// renvoyer les 5 attractions les plus proches
+		return distances;
+
+	}
+	public int getRewardPoints(Attraction attraction, User user) {
+
+		return this.rewardsService.getRewardPoints(attraction, user);
+	}
+
+	public Map<String, Location> getAllCurrentLocation(){
+		// récuperer dans une map la liste des users
+		Map<String, Location> userLastLocation = new HashMap<String, Location>();
+		List<User> users = getAllUsers();
+
+		// récupere le dernier élément de la liste dans la boucle
+
+		for(User user: users) {
+			VisitedLocation  lastLocation = user.getVisitedLocations().get(user.getVisitedLocations().size()-1);
+			userLastLocation.put(user.getUserId().toString(), lastLocation.location);
+		}
+		return userLastLocation;
+	}
 
 
 }
